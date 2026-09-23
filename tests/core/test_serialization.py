@@ -18,6 +18,7 @@ from great_expectations.data_context.types.base import (
     dataConnectorConfigSchema,
 )
 from great_expectations.util import (
+    convert_pandas_series_decimal_to_float_dtype,
     convert_to_json_serializable,
     deep_filter_properties_iterable,
     requires_lossy_conversion,
@@ -123,6 +124,30 @@ def test_lossy_conversion():
 
     d = Decimal("0.1")
     assert not requires_lossy_conversion(d)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value", ["Infinity", "-Infinity"])
+def test_infinite_decimal_converts_to_float_infinity(value, caplog):
+    """A SQL numeric/DECIMAL value of Infinity must serialize the same way a float
+    infinity already does, not raise decimal.InvalidOperation."""
+    caplog.set_level(logging.WARNING, logger="great_expectations.core")
+
+    assert not requires_lossy_conversion(Decimal(value))
+    assert convert_to_json_serializable(Decimal(value)) == float(value)
+    assert caplog.messages == []
+
+
+@pytest.mark.unit
+def test_infinite_decimal_in_pandas_series_converts_to_float_infinity():
+    """column.mean, column.sum and column.standard_deviation convert a pandas Decimal
+    column through the same function, so an infinity there raised too."""
+    series = pd.Series([Decimal("1.5"), Decimal("Infinity"), Decimal("-Infinity")])
+
+    converted = convert_pandas_series_decimal_to_float_dtype(data=series)
+
+    assert converted is not None
+    assert converted.tolist() == [1.5, float("inf"), float("-inf")]
 
 
 # TODO add unittests for convert_to_json_serializable() and ensure_json_serializable()
