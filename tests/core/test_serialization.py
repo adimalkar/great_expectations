@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -148,6 +149,23 @@ def test_infinite_decimal_in_pandas_series_converts_to_float_infinity():
 
     assert converted is not None
     assert converted.tolist() == [1.5, float("inf"), float("-inf")]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value", ["NaN", "-NaN"])
+def test_nan_decimal_converts_without_raising(value):
+    """A quiet NaN never reached the infinity failure: NaN - NaN is NaN under the default
+    decimal context, not a signal. requires_lossy_conversion relies on that, so pin it."""
+    assert isinstance(requires_lossy_conversion(Decimal(value)), bool)
+    assert convert_to_json_serializable(Decimal(value)) is None
+
+    converted = convert_pandas_series_decimal_to_float_dtype(
+        data=pd.Series([Decimal("1.5"), Decimal(value)])
+    )
+
+    assert converted is not None
+    assert converted[0] == 1.5
+    assert math.isnan(converted[1])
 
 
 # TODO add unittests for convert_to_json_serializable() and ensure_json_serializable()
